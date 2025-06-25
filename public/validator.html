@@ -17,7 +17,7 @@
         input[type="text"] { width: calc(100% - 22px); padding: 10px; margin-top: 10px; border: 1px solid #ccc; border-radius: 4px; }
         button { display: block; width: 100%; padding: 12px; margin-top: 20px; background-color: #0052cc; color: white; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; }
         button:hover { background-color: #0041a3; }
-        .result-box { margin-top: 20px; padding: 15px; border-radius: 4px; white-space: pre-wrap; font-family: monospace; line-height: 1.5; }
+        .result-box { margin-top: 20px; padding: 15px; border-radius: 4px; white-space: pre-wrap; font-family: monospace; line-height: 1.5; display: none; } /* Hidden by default */
         .result-box.error { background-color: #ffebe6; color: #bf2600; border: 1px solid #ff8f73; }
         .result-box.success { background-color: #e3fcef; color: #006644; border: 1px solid #57d9a3; }
         .hint { font-style: italic; color: #555; display: block; margin-top: 10px; }
@@ -35,10 +35,11 @@
             <h1>Template Validator</h1>
 
             <form id="validate-by-id-form">
-                <h2>Validate by Template ID</h2>
-                <p>Enter an existing Template ID to fetch and re-validate its content.</p>
-                <input type="text" id="template-id-input" placeholder="e.g., 1234567" required>
+                <h2>Validate by Template ID or Client Template ID</h2>
+                <p>Enter an existing ID to fetch and re-validate its content.</p>
+                <input type="text" id="template-id-input" placeholder="e.g., 1234567 or my-custom-id" required>
                 <button type="submit">Validate by ID</button>
+                <pre id="id-result" class="result-box"></pre>
             </form>
 
             <form id="validate-by-html-form">
@@ -46,36 +47,34 @@
                 <p>Paste your full email HTML below to check for syntax or Handlebars errors.</p>
                 <textarea id="html-input" placeholder="<html>...</html>"></textarea>
                 <button type="submit">Validate HTML</button>
+                <pre id="html-result" class="result-box"></pre>
             </form>
-
-            <div id="result-container" style="display: none;">
-                <h2>Validation Result</h2>
-                <pre id="result" class="result-box"></pre>
-            </div>
         </div>
     </main>
 
     <script>
-        const resultContainer = document.getElementById('result-container');
-        const resultDiv = document.getElementById('result');
+        const idResultDiv = document.getElementById('id-result');
+        const htmlResultDiv = document.getElementById('html-result');
 
         // Handler for the "Validate by ID" form
         document.getElementById('validate-by-id-form').addEventListener('submit', async function (event) {
             event.preventDefault();
             const templateId = document.getElementById('template-id-input').value;
-            resultContainer.style.display = 'block';
-            resultDiv.className = 'result-box';
-            resultDiv.textContent = 'Validating Template ID: ' + templateId + '...';
+            
+            idResultDiv.style.display = 'block';
+            idResultDiv.className = 'result-box';
+            idResultDiv.textContent = 'Validating Template ID: ' + templateId + '...';
+            htmlResultDiv.style.display = 'none'; // Hide the other result box
 
             try {
-                const response = await fetch(`/api/validate-template-by-id?templateId=${templateId}`);
+                const response = await fetch(`/api/validate-template-by-id?id=${templateId}`);
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error);
-                resultDiv.className = 'result-box success';
-                resultDiv.innerHTML = data.message;
+                idResultDiv.className = 'result-box success';
+                idResultDiv.innerHTML = data.message;
             } catch (error) {
-                resultDiv.className = 'result-box error';
-                resultDiv.innerHTML = '<strong>Validation Failed:</strong>\n\n' + error.message;
+                idResultDiv.className = 'result-box error';
+                idResultDiv.innerHTML = '<strong>Validation Failed:</strong>\n\n' + error.message;
             }
         });
 
@@ -83,14 +82,17 @@
         document.getElementById('validate-by-html-form').addEventListener('submit', async function (event) {
             event.preventDefault();
             const htmlContent = document.getElementById('html-input').value;
-            resultContainer.style.display = 'block';
+
+            htmlResultDiv.style.display = 'block';
+            idResultDiv.style.display = 'none'; // Hide the other result box
+            
             if (!htmlContent) {
-                resultDiv.className = 'result-box error';
-                resultDiv.textContent = 'Error: HTML input cannot be empty.';
+                htmlResultDiv.className = 'result-box error';
+                htmlResultDiv.textContent = 'Error: HTML input cannot be empty.';
                 return;
             }
-            resultDiv.className = 'result-box';
-            resultDiv.textContent = 'Validating HTML...';
+            htmlResultDiv.className = 'result-box';
+            htmlResultDiv.textContent = 'Validating HTML...';
 
             try {
                 const response = await fetch('/api/validate-template', {
@@ -100,11 +102,11 @@
                 });
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error);
-                resultDiv.className = 'result-box success';
-                resultDiv.innerHTML = data.message;
+                htmlResultDiv.className = 'result-box success';
+                htmlResultDiv.innerHTML = data.message;
             } catch (error) {
-                resultDiv.className = 'result-box error';
-                resultDiv.innerHTML = '<strong>Validation Failed:</strong>\n\n' + error.message;
+                htmlResultDiv.className = 'result-box error';
+                htmlResultDiv.innerHTML = '<strong>Validation Failed:</strong>\n\n' + error.message;
             }
         });
     </script>
