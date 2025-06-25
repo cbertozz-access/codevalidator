@@ -1,6 +1,6 @@
 const axios = require('axios');
 
-// A helper function to make error messages more user-friendly
+// This helper function remains the same
 function formatErrorMessage(iterableErrorMsg) {
     let friendlyHint = "";
     if (iterableErrorMsg.includes("Unclosed")) {
@@ -21,31 +21,37 @@ exports.handler = async function(event, context) {
     }
 
     let htmlContent;
+    let templateName;
     try {
-        // STEP 1: Intelligently fetch the template's HTML content
-        let getResponse;
-        // Check if the provided ID is purely numeric
-        if (/^\d+$/.test(providedId)) {
-            // It's a numeric templateId, use the standard endpoint
-            getResponse = await axios.get(`https://api.iterable.com/api/templates/email/${providedId}`, {
-                headers: { 'Api-Key': ITERABLE_API_KEY }
-            });
-        } else {
-            // It's a string, assume it's a clientTemplateId and use the specific endpoint
-            getResponse = await axios.get(`https://api.iterable.com/api/templates/getByClientTemplateId`, {
-                params: { clientTemplateId: providedId },
-                headers: { 'Api-Key': ITERABLE_API_KEY }
-            });
+        // STEP 1: Fetch the master list of ALL templates
+        const allTemplatesResponse = await axios.get('https://api.iterable.com/api/templates', {
+            headers: { 'Api-Key': ITERABLE_API_KEY }
+        });
+
+        const allTemplates = allTemplatesResponse.data.templates;
+        
+        // STEP 2: Find the specific template from the master list by its ID.
+        // We use '==' because the providedId is a string and the template.templateId is a number.
+        const foundTemplate = allTemplates.find(template => template.templateId == providedId);
+
+        if (!foundTemplate) {
+            throw new Error(`Template with ID '${providedId}' could not be found in the project's master list.`);
         }
-        htmlContent = getResponse.data.html;
+        
+        // Optional: Check if it's an email template before proceeding
+        if (foundTemplate.channelName !== 'Email') {
+             throw new Error(`Template ID '${providedId}' was found, but it is a '${foundTemplate.channelName}' template, not an Email template.`);
+        }
+
+        htmlContent = foundTemplate.html;
+        templateName = foundTemplate.name;
 
     } catch (error) {
-        const status = error.response ? error.response.status : 500;
-        const message = error.response ? (error.response.status === 404 ? `Template with ID '${providedId}' not found.` : error.response.data.msg) : "An internal server error occurred.";
-        return { statusCode: status, body: JSON.stringify({ error: message }) };
+        // This catch block now handles errors from fetching or finding the template
+        return { statusCode: 404, body: JSON.stringify({ error: error.message }) };
     }
 
-    // STEP 2: Use the fetched HTML to perform the validation via upsert
+    // STEP 3: Use the fetched HTML to perform the validation via upsert
     const clientTemplateId = "api-validator-temp-template-for-upsert";
     const payload = {
         name: "API-Template-Validator",
@@ -62,12 +68,12 @@ exports.handler = async function(event, context) {
         });
         return {
             statusCode: 200,
-            body: JSON.stringify({ message: `Success! Template ID <strong>${providedId}</strong> is valid.` })
+            body: JSON.stringify({ message: `✅ Success! The content of template "${templateName}" (ID: ${providedId}) is valid.` })
         };
     } catch (error) {
         const status = error.response ? error.response.status : 500;
         const message = error.response ? error.response.data.msg : "An internal server error occurred.";
-        const formattedMessage = formatErrorMessage(message); // Format the error here
+        const formattedMessage = formatErrorMessage(message);
         return {
             statusCode: status,
             body: JSON.stringify({ error: formattedMessage })
